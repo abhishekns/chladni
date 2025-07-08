@@ -109,7 +109,7 @@ class ChladniApp:
         self.status_imgsize_label = ttk.Label(self.statusbar_frame, textvariable=self.status_imgsize_var, anchor=tk.E, relief=tk.FLAT); self.status_imgsize_label.pack(side=tk.RIGHT, padx=5)
 
         content_frame = ttk.Frame(main_frame); content_frame.pack(expand=True, fill=tk.BOTH)
-        self.left_panel = ttk.Frame(content_frame, width=250, relief=tk.SUNKEN, borderwidth=1); self.left_panel.pack(side=tk.LEFT, fill=tk.Y, padx=(0,5))
+        self.left_panel = ttk.Frame(content_frame, width=285, relief=tk.SUNKEN, borderwidth=1); self.left_panel.pack(side=tk.LEFT, fill=tk.Y, padx=(0,5))
         self.wave_grid_frame = ttk.Frame(self.left_panel); self.wave_grid_frame.pack(expand=True, fill=tk.BOTH, padx=5, pady=5)
         self.wave_grid = ttk.Treeview(self.wave_grid_frame, columns=("on", "amplitude", "frequency", "phase"), show="headings")
         self.wave_grid.heading("on", text="On"); self.wave_grid.column("on", width=40, anchor=tk.CENTER)

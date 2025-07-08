@@ -11,7 +11,7 @@ CHL_ID = b'CHL\x00' # Packed array[0..3] of UTF8Char, original was #164'CHL'. Th
                    # However, typical Delphi/Lazarus packed array of char for IDs is often just the chars.
                    # Let's re-evaluate CHL_ID. If it's `packed array[0..3] of UTF8Char` initialized with `'CHL'`,
                    # it would be 'C', 'H', 'L', '\0'.
-CHL_ID_EXPECTED = b'CHL\0' # Standard interpretation of a 4-char array initialized with "CHL"
+CHL_ID_EXPECTED = b'\xA4CHL' # Standard interpretation of a 4-char array initialized with #164"CHL"
 CHL_UNTITLED = 'Untitled.chl'
 
 # File format versions

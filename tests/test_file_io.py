@@ -9,8 +9,8 @@ import numpy as np
 import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from src.file_io import load_chl_file, save_chl_file, ChladniData, CHL_ID_EXPECTED, VERSION_STANDARD, VERSION_WITH_LEVEL_MAP
-from src.core import WaveInfo, ValueMap
+from chladni.file_io import load_chl_file, save_chl_file, ChladniData, CHL_ID_EXPECTED, VERSION_STANDARD, VERSION_WITH_LEVEL_MAP
+from chladni.core import WaveInfo, ValueMap
 
 
 class TestFileIO(unittest.TestCase):
@@ -116,6 +116,100 @@ class TestFileIO(unittest.TestCase):
 
         with self.assertRaisesRegex(IOError, "Could not read expected level map data"):
             load_chl_file(test_filepath)
+
+    def test_load_malformed_data_various(self):
+        # Test case 1: Incorrect number of wave info items (too few bytes for last wave)
+        test_filepath_wave_count = os.path.join(self.test_dir, "bad_wave_count.chl")
+        with gzip.open(test_filepath_wave_count, 'wb') as gz_f:
+            gz_f.write(CHL_ID_EXPECTED)
+            gz_f.write(struct.pack('<H', VERSION_STANDARD))
+            gz_f.write(struct.pack('<I', 3)) # Claim 3 waves
+            gz_f.write(struct.pack('<I', 0)) # map_index
+            gz_f.write(struct.pack('<I', 10)) # width
+            gz_f.write(struct.pack('<I', 10)) # height
+            gz_f.write(struct.pack('B', 1))   # normalize
+            # Write 2 full waves
+            for wi in self.test_waves[:2]:
+                gz_f.write(struct.pack('?', wi.on))
+                gz_f.write(struct.pack('f', wi.amplitude))
+                gz_f.write(struct.pack('f', wi.frequency))
+                gz_f.write(struct.pack('f', wi.phase))
+            # Write partial 3rd wave (e.g., only 'on' and 'amplitude')
+            gz_f.write(struct.pack('?', self.test_waves[2].on))
+            gz_f.write(struct.pack('f', self.test_waves[2].amplitude))
+            # Missing frequency and phase for the 3rd wave
+
+        with self.assertRaises((struct.error, EOFError)): # struct.error if not enough bytes for unpack
+            load_chl_file(test_filepath_wave_count)
+
+        # Test case 2: Negative width/height (struct.pack will handle unsigned, so load will read as large positive)
+        # This scenario is more about how the ChladniSimulator handles these values later.
+        # file_io will load them as large unsigned integers. No error expected here from file_io itself.
+
+        # Test case 3: Data truncation at various points
+        base_data = bytearray()
+        base_data.extend(CHL_ID_EXPECTED)
+        base_data.extend(struct.pack('<H', VERSION_STANDARD))
+        base_data.extend(struct.pack('<I', 1)) # capacity
+        base_data.extend(struct.pack('<I', 0)) # map_index
+        base_data.extend(struct.pack('<I', 10)) # width
+        # Truncate before height
+        truncated_filepath_1 = os.path.join(self.test_dir, "truncated1.chl")
+        with gzip.open(truncated_filepath_1, 'wb') as gz_f:
+            gz_f.write(base_data)
+        with self.assertRaises((struct.error, EOFError)):
+            load_chl_file(truncated_filepath_1)
+
+        base_data.extend(struct.pack('<I', 10)) # height
+        base_data.extend(struct.pack('B', 1))   # normalize
+        # Truncate before wave data
+        truncated_filepath_2 = os.path.join(self.test_dir, "truncated2.chl")
+        with gzip.open(truncated_filepath_2, 'wb') as gz_f:
+            gz_f.write(base_data)
+        with self.assertRaises((struct.error, EOFError)):
+            load_chl_file(truncated_filepath_2)
+
+
+    def test_save_empty_wave_infos(self):
+        test_filepath = os.path.join(self.test_dir, "empty_waves.chl")
+        data_empty_waves = ChladniData(
+            wave_infos=[],
+            map_index=0,
+            width=10,
+            height=10,
+            normalize=False,
+            value_map=None
+        )
+        save_chl_file(test_filepath, data_empty_waves, save_level_map=False)
+        self.assertTrue(os.path.exists(test_filepath))
+
+        loaded_data = load_chl_file(test_filepath)
+        self.assertEqual(len(loaded_data.wave_infos), 0)
+        self.assertEqual(loaded_data.width, 10)
+
+    def test_save_value_map_zero_dimensions(self):
+        test_filepath = os.path.join(self.test_dir, "zero_dim_map.chl")
+        vm_zero = ValueMap(0, 0)
+        data_zero_map = ChladniData(
+            wave_infos=self.test_waves[:1],
+            map_index=0,
+            width=0,
+            height=0,
+            normalize=False,
+            value_map=vm_zero
+        )
+        # Try saving with level map True, even if dimensions are zero
+        save_chl_file(test_filepath, data_zero_map, save_level_map=True)
+        self.assertTrue(os.path.exists(test_filepath))
+
+        loaded_data = load_chl_file(test_filepath)
+        self.assertEqual(loaded_data.width, 0)
+        self.assertEqual(loaded_data.height, 0)
+        self.assertIsNotNone(loaded_data.value_map) # ValueMap object should be created
+        self.assertTrue(loaded_data.value_map.empty) # And it should be empty
+        if loaded_data.value_map._bits is not None: # Check internal _bits structure
+             self.assertEqual(loaded_data.value_map._bits.size, 0)
+
 
 if __name__ == '__main__':
     unittest.main()
